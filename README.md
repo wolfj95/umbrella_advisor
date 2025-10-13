@@ -4,11 +4,12 @@ An automated daily weather checker that emails you at 7am to let you know if you
 
 ## Features
 
-- Fetches 24-hour weather forecast from OpenWeatherMap
+- Fetches 24-hour hourly weather forecast from OpenWeatherMap One Call API 3.0
 - Analyzes precipitation probability and weather conditions
 - Sends beautifully formatted HTML email with umbrella recommendation
 - Runs automatically every day at 7am using GitHub Actions
 - Uses your personal email account (Gmail, Outlook, etc.)
+- Supports both city names and GPS coordinates
 
 ## Setup Instructions
 
@@ -16,8 +17,12 @@ An automated daily weather checker that emails you at 7am to let you know if you
 
 1. Go to [OpenWeatherMap](https://openweathermap.org/api)
 2. Sign up for a free account
-3. Generate an API key (free tier allows 1,000 calls/day)
-4. Save your API key for later
+3. Navigate to [API Keys](https://home.openweathermap.org/api_keys) and copy your API key
+4. **Important**: This script uses the **One Call API 3.0**, which requires a subscription
+   - Go to [One Call API 3.0](https://openweathermap.org/api/one-call-3)
+   - Subscribe to "One Call by Call" (includes 1,000 free calls/day)
+   - No credit card required for the free tier
+5. Wait 1-2 hours for your API key to activate (new keys take time to activate)
 
 ### 2. Set Up Email App Password
 
@@ -61,13 +66,18 @@ git push -u origin main
 
 | Secret Name | Description | Example |
 |------------|-------------|---------|
-| `WEATHER_API_KEY` | Your OpenWeatherMap API key | `abc123def456...` |
-| `LOCATION` | Your city/location | `Boston,MA` or `40.7128,-74.0060` |
+| `WEATHER_API_KEY` | Your OpenWeatherMap API key (with One Call 3.0 subscription) | `abc123def456...` |
+| `LOCATION` | Your city/location with country code | `Somerville,MA,US` or `Boston,MA,US` |
 | `SMTP_SERVER` | Your email provider's SMTP server | `smtp.gmail.com` |
 | `SMTP_PORT` | SMTP port (usually 587) | `587` |
 | `SENDER_EMAIL` | Your email address | `you@gmail.com` |
 | `SENDER_PASSWORD` | Your app-specific password | `abcd efgh ijkl mnop` |
 | `RECIPIENT_EMAIL` | Email to receive notifications (usually same as sender) | `you@gmail.com` |
+
+**Location Format Options:**
+- City with state and country: `Somerville,MA,US` (recommended for US cities)
+- City with country: `London,GB` or `Paris,FR`
+- GPS coordinates: `42.3875,-71.0995` (latitude,longitude)
 
 #### Common SMTP Servers:
 - **Gmail**: `smtp.gmail.com` (port 587)
@@ -99,19 +109,30 @@ The workflow runs at 7am EST by default. To change this:
 ## How It Works
 
 1. **GitHub Actions** triggers the workflow daily at 7am (or manually)
-2. The script fetches weather data from OpenWeatherMap API
-3. It analyzes the next 24 hours for:
+2. The script uses the **Geocoding API** to convert your city name to coordinates
+3. It fetches weather data from **One Call API 3.0** with hourly forecasts
+4. It analyzes the next 24 hours for:
    - Rain, drizzle, thunderstorms, or snow
    - Probability of precipitation (30% or higher)
-4. Sends you an HTML email with:
+5. Sends you an HTML email with:
    - Clear recommendation (bring umbrella or not)
-   - Explanation with specific precipitation times
-   - Full 24-hour forecast
-5. Email includes both plain text and beautiful HTML formatting
+   - Explanation with specific precipitation times and probabilities
+   - Full 24-hour hourly forecast with temperature and precipitation chance
+6. Email includes both plain text and beautiful HTML formatting
 
 ## Troubleshooting
 
-### Workflow fails with authentication error
+### Workflow fails with 401 or 403 error
+- Your API key may not be activated yet (wait 1-2 hours after creation)
+- Verify you've subscribed to **One Call API 3.0** ("One Call by Call" subscription)
+- Check that your API key is correctly set in GitHub Secrets
+
+### Workflow fails with "Location not found"
+- Add country code to your location: `Somerville,MA,US` instead of `Somerville,MA`
+- Use the format: `City,State,CountryCode` for US cities
+- Or use GPS coordinates: `42.3875,-71.0995`
+
+### Workflow fails with authentication error (email)
 - Verify you're using an **app-specific password**, not your regular email password
 - Check that 2-Factor Authentication is enabled for your email account
 - Ensure the SMTP server and port are correct for your provider
@@ -122,9 +143,10 @@ The workflow runs at 7am EST by default. To change this:
 - Review workflow logs in GitHub Actions tab
 
 ### Weather data not loading
-- Verify your `WEATHER_API_KEY` is valid
-- Check that `LOCATION` is in correct format: `City,State` or `latitude,longitude`
-- Free OpenWeatherMap tier has 1,000 calls/day limit
+- Verify your `WEATHER_API_KEY` is valid and activated
+- Check that you've subscribed to One Call API 3.0 (required, but free tier available)
+- Verify `LOCATION` format includes country code: `Boston,MA,US`
+- Free tier has 1,000 calls/day limit
 
 ### Wrong timezone
 - GitHub Actions runs in UTC

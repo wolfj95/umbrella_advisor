@@ -12,19 +12,60 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 
-def get_weather_forecast(api_key, location):
+def geocode_location(api_key, location):
     """
-    Fetch weather forecast from OpenWeatherMap API
+    Convert city name to latitude/longitude coordinates
 
     Args:
         api_key: OpenWeatherMap API key
-        location: City name or "lat,lon" coordinates
+        location: City name (e.g., "Boston,MA,US" or "London,GB")
 
     Returns:
-        dict: Weather data including precipitation probability
+        tuple: (latitude, longitude, location_name)
     """
-    base_url = "http://api.openweathermap.org/data/2.5/forecast"
+    geocode_url = "http://api.openweathermap.org/geo/1.0/direct"
+    params = {
+        'q': location,
+        'limit': 1,
+        'appid': api_key
+    }
 
+    print(f"Geocoding location: {location}")
+    response = requests.get(geocode_url, params=params)
+    response.raise_for_status()
+
+    data = response.json()
+    if not data:
+        raise ValueError(f"Location '{location}' not found. Try adding country code (e.g., 'Boston,MA,US')")
+
+    result = data[0]
+    lat = result['lat']
+    lon = result['lon']
+    name = result['name']
+    state = result.get('state', '')
+    country = result.get('country', '')
+
+    location_name = f"{name}"
+    if state:
+        location_name += f", {state}"
+    if country:
+        location_name += f", {country}"
+
+    print(f"Found coordinates: {lat}, {lon} ({location_name})")
+    return lat, lon, location_name
+
+
+def get_weather_forecast(api_key, location):
+    """
+    Fetch weather forecast from OpenWeatherMap One Call API 3.0
+
+    Args:
+        api_key: OpenWeatherMap API key
+        location: City name (e.g., "Boston,MA,US") or "lat,lon" coordinates
+
+    Returns:
+        tuple: (weather_data dict, location_name string)
+    """
     # Check if location is coordinates (numeric) or city name
     if ',' in location:
         parts = location.split(',')
@@ -32,49 +73,54 @@ def get_weather_forecast(api_key, location):
         try:
             lat = float(parts[0].strip())
             lon = float(parts[1].strip())
-            params = {
-                'lat': lat,
-                'lon': lon,
-                'appid': api_key,
-                'units': 'imperial'
-            }
+            location_name = f"Coordinates: {lat}, {lon}"
         except ValueError:
-            # Not numeric, treat as city,state/country
-            params = {
-                'q': location,
-                'appid': api_key,
-                'units': 'imperial'
-            }
+            # Not numeric, geocode the city name
+            lat, lon, location_name = geocode_location(api_key, location)
     else:
-        params = {
-            'q': location,
-            'appid': api_key,
-            'units': 'imperial'
-        }
+        # Single city name, geocode it
+        lat, lon, location_name = geocode_location(api_key, location)
 
+    # Use One Call API 3.0
+    base_url = "https://api.openweathermap.org/data/3.0/onecall"
+    params = {
+        'lat': lat,
+        'lon': lon,
+        'appid': api_key,
+        'units': 'imperial',
+        'exclude': 'minutely,alerts'  # We only need hourly and daily forecasts
+    }
+
+    print(f"Fetching weather from One Call API 3.0...")
     response = requests.get(base_url, params=params)
+
+    if response.status_code != 200:
+        print(f"Error Response: {response.status_code}")
+        print(f"Response Body: {response.text}")
+
     response.raise_for_status()
 
-    return response.json()
+    return response.json(), location_name
 
 
 def analyze_weather(weather_data):
     """
     Analyze weather data to determine if umbrella is needed
+    Uses One Call API 3.0 response format
 
     Args:
-        weather_data: JSON response from OpenWeatherMap
+        weather_data: JSON response from OpenWeatherMap One Call API 3.0
 
     Returns:
         tuple: (needs_umbrella: bool, reason: str, forecast_details: str)
     """
-    # Check next 24 hours (8 3-hour forecasts)
-    forecasts = weather_data['list'][:8]
+    # Check next 24 hours from hourly forecast
+    hourly_forecasts = weather_data['hourly'][:24]
 
     rain_forecasts = []
     conditions = []
 
-    for forecast in forecasts:
+    for forecast in hourly_forecasts:
         time = datetime.fromtimestamp(forecast['dt']).strftime('%I:%M %p')
         weather = forecast['weather'][0]
         description = weather['description']
@@ -83,7 +129,7 @@ def analyze_weather(weather_data):
         # Check for precipitation
         pop = forecast.get('pop', 0) * 100  # Probability of precipitation
 
-        conditions.append(f"  • {time}: {description.title()} (Temp: {forecast['main']['temp']:.0f}°F)")
+        conditions.append(f"  • {time}: {description.title()} (Temp: {forecast['temp']:.0f}°F, {pop:.0f}% precip)")
 
         # Check if rain/snow is likely
         if main_weather in ['Rain', 'Drizzle', 'Thunderstorm', 'Snow']:
@@ -226,7 +272,7 @@ def main():
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
     print(f"Fetching weather for {location}...")
-    weather_data = get_weather_forecast(weather_api_key, location)
+    weather_data, location_name = get_weather_forecast(weather_api_key, location)
 
     print("Analyzing weather conditions...")
     needs_umbrella, reason, forecast_details = analyze_weather(weather_data)
@@ -234,7 +280,7 @@ def main():
     print(f"Sending email to {recipient_email}...")
     send_email(
         smtp_server, smtp_port, sender_email, sender_password, recipient_email,
-        needs_umbrella, reason, forecast_details, location
+        needs_umbrella, reason, forecast_details, location_name
     )
 
     print("✓ Email sent successfully!")
