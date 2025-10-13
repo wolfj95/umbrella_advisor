@@ -25,15 +25,26 @@ def get_weather_forecast(api_key, location):
     """
     base_url = "http://api.openweathermap.org/data/2.5/forecast"
 
-    # Check if location is coordinates or city name
+    # Check if location is coordinates (numeric) or city name
     if ',' in location:
-        lat, lon = location.split(',')
-        params = {
-            'lat': lat.strip(),
-            'lon': lon.strip(),
-            'appid': api_key,
-            'units': 'imperial'
-        }
+        parts = location.split(',')
+        # Check if both parts are numeric (coordinates)
+        try:
+            lat = float(parts[0].strip())
+            lon = float(parts[1].strip())
+            params = {
+                'lat': lat,
+                'lon': lon,
+                'appid': api_key,
+                'units': 'imperial'
+            }
+        except ValueError:
+            # Not numeric, treat as city,state/country
+            params = {
+                'q': location,
+                'appid': api_key,
+                'units': 'imperial'
+            }
     else:
         params = {
             'q': location,
