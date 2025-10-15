@@ -1,6 +1,6 @@
 # Umbrella Advisor
 
-An automated daily weather checker that emails you at 7am to let you know if you should bring an umbrella. Runs automatically using GitHub Actions. test
+An automated daily weather checker that emails you at 7am to let you know if you should bring an umbrella. Runs automatically using GitHub Actions. test 2
 
 ## Features
 
